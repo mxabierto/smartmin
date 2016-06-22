@@ -287,6 +287,10 @@ class SmartModel(models.Model):
         header = row_list.pop(0)
         header = [cls.normalize_value(_).lower() for _ in header]
         cls.validate_import_header(header)
+        # read our rows
+        org = user.get_org()
+        is_admin = org.administrators.filter(id=user.id).exists()
+        country = org.get_country_code()
 
         # read our rows
         line_number = 1
@@ -296,7 +300,7 @@ class SmartModel(models.Model):
             field_values['modified_by'] = user
             try:
                 field_values = cls.prepare_fields(field_values, import_params, user)
-                record = cls.create_instance(field_values)
+                record = cls.create_instance_by_admin(field_values, is_admin,org, country)
                 if record:
                     records.append(record)
                 else:
