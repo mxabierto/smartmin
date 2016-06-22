@@ -259,6 +259,117 @@ class SmartModel(models.Model):
 
         return records
 
+    """ This method use as template the method import_xls, but assume a csv file
+    in the parameters"""
+    @classmethod
+    def import_csv_file(cls, filename, user, import_params, log=None, import_results=None):
+
+        # timezone for date cells can be specified as an import parameter or defaults to UTC
+        # use now to determine a relevant timezone
+        naive_timezone = pytz.timezone(import_params['timezone']) if import_params and 'timezone' in import_params else pytz.UTC
+        tz = timezone.now().astimezone(naive_timezone).tzinfo
+
+        records = []
+        num_errors = 0
+        error_messages = []
+
+        # read our header
+        header = []
+        import csv
+        import unicodedata
+        delimiter_unicode = ','
+        quotechar_unicode = '|'
+        delimiter = unicodedata.normalize('NFKD', delimiter_unicode).encode('ascii','ignore')
+        quotechar = unicodedata.normalize('NFKD', quotechar_unicode).encode('ascii','ignore')
+        with open(filename, 'rb') as csvfile:
+            csv_reader = csv.reader(csvfile, quoting = csv.QUOTE_ALL, delimiter=delimiter, quotechar=quotechar)
+            row_list = list(csv_reader)
+        header = row_list.pop(0)
+        header = [cls.normalize_value(_).lower() for _ in header]
+        cls.validate_import_header(header)
+
+        # read our rows
+        line_number = 1
+        for row in row_list :
+            field_values = dict(zip(header, row))
+            field_values['created_by'] = user
+            field_values['modified_by'] = user
+            try:
+                field_values = cls.prepare_fields(field_values, import_params, user)
+                record = cls.create_instance(field_values)
+                if record:
+                    records.append(record)
+                else:
+                    num_errors += 1
+
+            except SmartImportRowError as e:
+                error_messages.append(dict(line=line_number+1, error=text_type(e)))
+
+            except Exception as e:
+                if log:
+                    traceback.print_exc(100, log)
+                raise Exception("Line %d: %s\n\n%s" % (line_number, text_type(e), field_values))
+            line_number += 1
+
+        if import_results is not None:
+            import_results['records'] = len(records)
+            import_results['errors'] = num_errors + len(error_messages)
+            import_results['error_messages'] = error_messages
+
+        return records
+
+    @classmethod
+    def import_csvv(cls, filename, user, import_params, log=None, import_results=None):
+
+        # timezone for date cells can be specified as an import parameter or defaults to UTC
+        # use now to determine a relevant timezone
+        naive_timezone = pytz.timezone(import_params['timezone']) if import_params and 'timezone' in import_params else pytz.UTC
+        tz = timezone.now().astimezone(naive_timezone).tzinfo
+
+        records = []
+        num_errors = 0
+        error_messages = []
+
+        # read our header
+        header = []
+        import csv
+        with open(filename, 'rb') as csvfile:
+            csv_reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+            row_list = list(csv_reader)
+        header = row_list.pop(0)
+        header = [cls.normalize_value(_).lower() for _ in header]
+        cls.validate_import_header(header)
+
+        # read our rows
+        line_number = 1
+        for row in row_list :
+            field_values = dict(zip(header, row))
+            field_values['created_by'] = user
+            field_values['modified_by'] = user
+            try:
+                field_values = cls.prepare_fields(field_values, import_params, user)
+                record = cls.create_instance(field_values)
+                if record:
+                    records.append(record)
+                else:
+                    num_errors += 1
+
+            except SmartImportRowError as e:
+                error_messages.append(dict(line=line_number+1, error=text_type(e)))
+
+            except Exception as e:
+                if log:
+                    traceback.print_exc(100, log)
+                raise Exception("Line %d: %s\n\n%s" % (line_number, text_type(e), field_values))
+            line_number += 1
+
+        if import_results is not None:
+            import_results['records'] = len(records)
+            import_results['errors'] = num_errors + len(error_messages)
+            import_results['error_messages'] = error_messages
+
+        return records
+
     @classmethod
     def get_cell_value(cls, workbook, tz, cell):
         if cell.ctype == XL_CELL_DATE:
