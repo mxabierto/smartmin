@@ -288,7 +288,9 @@ class SmartModel(models.Model):
         header = [cls.normalize_value(_).lower() for _ in header]
         cls.validate_import_header(header)
         # read our rows
-        org = user.get_org()
+        if 'org_id' not in import_params:
+            raise ValueError("Import fields dictionary must include org and created_by")
+        org = cls.get_org_by_id(import_params['org_id'])
         is_admin = org.administrators.filter(id=user.id).exists()
         country = org.get_country_code()
 
